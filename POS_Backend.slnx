@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="POS_Backend.Datos/POS_Backend.Datos.csproj" />
+  <Project Path="POS_Backend.Logica/POS_Backend.Logica.csproj" />
+  <Project Path="POS_Backend/POS_Backend.csproj" />
+</Solution>
