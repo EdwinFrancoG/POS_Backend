@@ -1,21 +1,22 @@
 using Microsoft.EntityFrameworkCore;
 using POS_Backend.Datos;
 
-namespace POS_Backend.Logica.Servicios;
+namespace POS_Backend.Logica.Domain;
 
-public class CustomerService
+public record Resultado(bool Exito, string? Error);
+public class CustomerDomain
 {
-     private readonly AppDbContext _db;
-    public CustomerService(AppDbContext db) => _db = db;
+    private readonly AppDbContext _db;
+    public CustomerDomain(AppDbContext db) => _db = db;
 
     //Consultas
-     public async Task<List<Customers>> ObtenerTodosAsync(bool soloActivos = true) =>
-        await _db.Customers
-            .Where(c => !soloActivos || c.IsActive)
-            .OrderBy(c => c.Name)
-            .ToListAsync();
-     public async Task<Customers?> ObtenerPorIdAsync(int id) =>
-        await _db.Customers.FindAsync(id);
+    public async Task<List<Customers>> ObtenerTodosAsync(bool soloActivos = true) =>
+       await _db.Customers
+           .Where(c => !soloActivos || c.IsActive)
+           .OrderBy(c => c.Name)
+           .ToListAsync();
+    public async Task<Customers?> ObtenerPorIdAsync(int id) =>
+       await _db.Customers.FindAsync(id);
 
     public async Task<List<Customers>> BuscarAsync(string texto)
     {
@@ -31,7 +32,7 @@ public class CustomerService
 
     //Operaciones
     //Crear
-     public async Task<Resultado> CrearAsync(Customers cliente)
+    public async Task<Resultado> CrearAsync(Customers cliente)
     {
         var error = Validar(cliente);
         if (error != null) return new(false, error);
@@ -93,7 +94,7 @@ public class CustomerService
         return new(true, null);
     }
     //Validaciones
-     private static string? Validar(Customers c)
+    private static string? Validar(Customers c)
     {
         if (string.IsNullOrWhiteSpace(c.Code)) return "El código es obligatorio";
         if (string.IsNullOrWhiteSpace(c.Name)) return "El nombre es obligatorio";
