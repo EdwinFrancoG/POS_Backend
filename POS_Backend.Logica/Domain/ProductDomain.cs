@@ -1,10 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using POS_Backend;
 using POS_Backend.Datos;
 
-namespace POS_Backend.Logica.Servicios;
-public record ResultadoProduct(bool Exito, string? Error);
+namespace POS_Backend.Logica.Domain;
+public record ResultadoProducto(bool Exito, string? Error);
 public class ProductService
 {
     private readonly AppDbContext _db;
@@ -12,20 +11,20 @@ public class ProductService
 
     //Las consultas
     public async Task<List<Product>> ObtenerTodosAsync(bool soloActivos = true) =>
-    await _db.Product
+    await _db.Products
     .Include(p => p.Category)
-    .Where(p => !soloActivos || p.Active)
+    .Where(p => !soloActivos || p.IsActive)
     .OrderBy(p => p.Name)
     .ToListAsync();
 
     public async Task<Product?> ObtenerporId(int Id) =>
-    await _db.Product.Include(p => p.Category)
+    await _db.Products.Include(p => p.Category)
     .FirstOrDefaultAsync(p => p.Id == Id);
 
     public async Task<List<Product>> BuscarAsync(string texto)
     {
         texto = texto.Trim().ToLower();
-        return await _db.Product
+        return await _db.Products
         .Where(p => p.IsActive &&
         (p.Name.ToLower().Contains(texto) ||
         p.Code.ToLower().Contains(texto) ||
@@ -33,8 +32,8 @@ public class ProductService
         .ToListAsync();
     }
     public async Task<List<Product>> ObtenerStockBajo() =>
-    await _db.Product
-    .Where(p => p.IsActive && p.Stock <= p.MinimunStock)
+    await _db.Products
+    .Where(p => p.IsActive && p.Stock <= p.MinimumStock)
     .ToListAsync();
 
     // Todas las operaciones
@@ -46,18 +45,18 @@ public class ProductService
 
         producto.Code = producto.Code.Trim();
 
-        if (await _db.Product.AnyAsync(p => p.Code == producto.Code))
+        if (await _db.Products.AnyAsync(p => p.Code == producto.Code))
             return new(false, "Ya existe un producto con ese código");
 
         if (!string.IsNullOrWhiteSpace(producto.Barcode) &&
-            await _db.Product.AnyAsync(p => p.Barcode == producto.Barcode))
+            await _db.Products.AnyAsync(p => p.Barcode == producto.Barcode))
             return new(false, "Ya existe un producto con ese código de barras");   
 
-         if (!await _db.Category.AnyAsync(c => c.Id == producto.CategoryId))
+         if (!await _db.Categories.AnyAsync(c => c.Id == producto.CategoryId))
             return new(false, "La categoría no existe");        
 
              producto.IsActive = true;
-             _db.Product.Add(producto);
+             _db.Products.Add(producto);
             await _db.SaveChangesAsync();
             return new(true, null);
     }
@@ -67,21 +66,21 @@ public class ProductService
         var error = Validar(producto);
         if(error !=null) return new(false, error);
 
-        var existente = await _db.Product.FindAsync(producto.Id);
+        var existente = await _db.Products.FindAsync(producto.Id);
         if(existente == null)
         return new(false, "El producto no existe");
 
     producto.Code = producto.Code.Trim();
 
-    if (await _db.Product.AnyAsync(p => p.Code == producto.Code && p.Id != producto.Id))
+    if (await _db.Products.AnyAsync(p => p.Code == producto.Code && p.Id != producto.Id))
         return new(false, "Ya existe otro producto con ese código");
     
 
     if (!string.IsNullOrWhiteSpace(producto.Barcode) &&
-        await _db.Product.AnyAsync(p => p.Barcode == producto.Barcode && p.Id != producto.Id))
+        await _db.Products.AnyAsync(p => p.Barcode == producto.Barcode && p.Id != producto.Id))
         return new(false, "Ya existe otro producto con ese código de barras");  
 
-     if (!await _db.Category.AnyAsync(c => c.Id == producto.CategoryId))
+     if (!await _db.Categories.AnyAsync(c => c.Id == producto.CategoryId))
         return new(false, "La categoría no existe");
 
     existente.Code = producto.Code;
@@ -94,7 +93,7 @@ public class ProductService
     existente.AverageCost = producto.AverageCost;
     existente.SalePrice = producto.SalePrice;
     existente.TaxRate = producto.TaxRate;
-    existente.MinimunStock = producto.MinimunStock;
+    existente.MinimumStock = producto.MinimumStock;
 
     await _db.SaveChangesAsync();
     return new(true, null);
@@ -102,8 +101,8 @@ public class ProductService
     //Cambiar estado
     public async Task<ResultadoProducto> CambiarEstadoAsync(int Id, bool Activo)
     {
-        var producto = await _db.Product.FindAsync(Id);
-        if(producto = null)
+        var producto = await _db.Products.FindAsync(Id);
+        if(producto == null)
         return new(false, "El producto no existe");
 
         producto.IsActive = Activo;
