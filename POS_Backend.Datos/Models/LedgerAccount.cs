@@ -18,7 +18,7 @@ public class LedgerAccount
 
     [ForeignKey("ParentAccountId")]
     public LedgerAccount? ParentAccount { get; set; }
-    ICollection<LedgerAccount> SubAccounts { get; set; }
+    public ICollection<LedgerAccount> SubAccounts { get; set; }
     =new List<LedgerAccount>();
 
     public ICollection<JournalEntryLine> JournalEntryLines { get; set; }
