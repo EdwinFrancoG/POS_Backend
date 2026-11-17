@@ -21,6 +21,15 @@ public class AppDbContext : DbContext
     public DbSet<PurchaseOrder> PurchaseOrders { get; set; }
     public DbSet<PurchaseOrderLine> PurchaseOrderLines { get; set; }
 
+    // Inventario
+    public DbSet<InventoryMovement> InventoryMovements { get; set; }
+
+    // Contabilidad
+    public DbSet<LedgerAccount> LedgerAccounts { get; set; }
+    public DbSet<AccountMapping> AccountMappings { get; set; }
+    public DbSet<JournalEntry> JournalEntries { get; set; }
+    public DbSet<JournalEntryLine> JournalEntryLines { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Carga automáticamente todas las clases IEntityTypeConfiguration<T>
