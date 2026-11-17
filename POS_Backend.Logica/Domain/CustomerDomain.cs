@@ -3,7 +3,6 @@ using POS_Backend.Datos;
 
 namespace POS_Backend.Logica.Domain;
 
-public record Resultado(bool Exito, string? Error);
 public class CustomerDomain
 {
     private readonly AppDbContext _db;
