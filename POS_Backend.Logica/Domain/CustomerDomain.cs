@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using POS_Backend.Datos;
+using POS_Backend.Datos.Models;
 
 namespace POS_Backend.Logica.Domain;
 
