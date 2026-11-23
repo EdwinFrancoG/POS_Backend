@@ -30,6 +30,21 @@ public class AppDbContext : DbContext
     public DbSet<JournalEntry> JournalEntries { get; set; }
     public DbSet<JournalEntryLine> JournalEntryLines { get; set; }
 
+    // Ventas
+    public DbSet<Invoices> Invoices { get; set; }
+    public DbSet<InvoiceLines> InvoiceLines { get; set; }
+    public DbSet<InvoiceNumberRanges> InvoiceNumberRanges { get; set; }
+    public DbSet<Payments> Payments { get; set; }
+    public DbSet<CashClosings> CashClosings { get; set; }
+
+    // Seguridad y auditoría
+    public DbSet<Users> Users { get; set; }
+    public DbSet<Roles> Roles { get; set; }
+    public DbSet<Permissions> Permissions { get; set; }
+    public DbSet<UserRoles> UserRoles { get; set; }
+    public DbSet<RolesPermissions> RolesPermissions { get; set; }
+    public DbSet<AuditLogs> AuditLogs { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Carga automáticamente todas las clases IEntityTypeConfiguration<T>

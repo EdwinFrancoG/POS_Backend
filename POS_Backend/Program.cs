@@ -17,6 +17,12 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    // Swagger UI usa el documento OpenAPI que genera .NET en /openapi/v1.json
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/openapi/v1.json", "POS Backend v1");
+    });
 }
 
 app.UseHttpsRedirection();

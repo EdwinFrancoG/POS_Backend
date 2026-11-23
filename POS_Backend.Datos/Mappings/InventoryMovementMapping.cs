@@ -34,7 +34,7 @@ namespace POS_Backend.Datos.Mappings
                 .HasMaxLength(250);
 
             builder.HasOne(i => i.Product)
-                .WithMany()
+                .WithMany(p => p.InventoryMovements)
                 .HasForeignKey(i => i.ProductId);
         }
     }
