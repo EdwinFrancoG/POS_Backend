@@ -1,7 +1,10 @@
-﻿namespace POS_Backend.Datos.Models;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace POS_Backend.Datos.Models;
 
 public class AuditLogs
 {
+    [Key]
     public long Id { get; set; }
     public DateTime Date { get; set; }
     public int? UserId { get; set; }
