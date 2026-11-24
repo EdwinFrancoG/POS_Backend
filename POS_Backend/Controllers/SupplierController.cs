@@ -13,19 +13,19 @@ public class ProveedoresController : ControllerBase
     public ProveedoresController(ProveedorService servicio) => _servicio = servicio;
 
     [HttpGet]
-    public async Task<ActionResult<List<ProveedorDto>>> Listar(
+    public async Task<ActionResult<List<ProveedorDto>>> getSupplier(
         [FromQuery] bool soloActivos = true, CancellationToken ct = default)
         => Ok(await _servicio.ListarAsync(soloActivos, ct));
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<ProveedorDto>> Obtener(int id, CancellationToken ct)
+    public async Task<ActionResult<ProveedorDto>> getSupplierById(int id, CancellationToken ct)
         => Ok(await _servicio.ObtenerAsync(id, ct));
 
     [HttpPost]
     public async Task<ActionResult<ProveedorDto>> Crear(ProveedorRequest req, CancellationToken ct)
     {
         var creado = await _servicio.CrearAsync(req, ct);
-        return CreatedAtAction(nameof(Obtener), new { id = creado.Id }, creado);
+        return CreatedAtAction(nameof(getSupplierById), new { id = creado.Id }, creado);
     }
 
     [HttpPut("{id:int}")]

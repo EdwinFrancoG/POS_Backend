@@ -11,8 +11,8 @@ namespace POS_Backend.Datos.Mappings
     {
         public void Configure(EntityTypeBuilder<UserRoles> builder)
         {
-            builder.ToTable("UserRoles");
-            builder.HasKey(x => new { x.UserId, x.RoleId });
+            // Tabla intermedia: la clave primaria es la combinación Usuario + Rol.
+            builder.HasKey(ur => new { ur.UserId, ur.RoleId });
 
             builder.HasOne(ur => ur.User)
                 .WithMany(u => u.UserRoles)

@@ -11,24 +11,15 @@ namespace POS_Backend.Datos.Mappings
     {
         public void Configure(EntityTypeBuilder<Payments> builder)
         {
-            builder.ToTable("Payments");
-            builder.HasKey(x => x.Id);
-            builder.Property(x => x.Date)
-                .IsRequired();
-            builder.Property(x => x.Amount)
-                .HasColumnType("decimal(18,2)")
-                .IsRequired();
-            builder.Property(x => x.Method)
-                .HasMaxLength(50)
-                .IsRequired();
-            builder.Property(x => x.Reference)
-                .HasMaxLength(100);
+            builder.HasKey(p => p.Id);
 
             builder.HasOne(p => p.Invoice)
-              .WithMany()
-              .HasForeignKey(p => p.InvoiceId)
-              .OnDelete(DeleteBehavior.Restrict);
+                .WithMany(i => i.Payments)
+                .HasForeignKey(p => p.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
 
+            // Restrict evita el error de SQL Server "multiple cascade paths"
+            // (Users -> Invoices -> Payments y Users -> Payments).
             builder.HasOne(p => p.User)
                 .WithMany(u => u.Payments)
                 .HasForeignKey(p => p.UserId)

@@ -11,8 +11,8 @@ namespace POS_Backend.Datos.Mappings
     {
         public void Configure(EntityTypeBuilder<RolesPermissions> builder)
         {
-            builder.ToTable("RolesPermissions");
-            builder.HasKey(x => new { x.RoleId, x.PermissionId });
+            // Tabla intermedia: la clave primaria es la combinación Rol + Permiso.
+            builder.HasKey(rp => new { rp.RoleId, rp.PermissionId });
 
             builder.HasOne(rp => rp.Role)
                 .WithMany(r => r.RolesPermissions)
