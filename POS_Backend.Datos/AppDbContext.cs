@@ -19,6 +19,15 @@ namespace POS_Backend.Datos
         public DbSet<JournalEntryLine> JournalEntryLines { get; set; }
         public DbSet<LedgerAccount> LedgerAccounts { get; set; }
 
+        ///Implementación de de las entidades restantes de la base de datos
+   
+        public DbSet<AuditLogs> AuditLogs { get; set; }
+        public DbSet<CashClosings> CashClosings { get; set; }
+        public DbSet<Customers> Customers { get; set; }
+        public DbSet<InvoiceLines> InvoiceLines { get; set; }
+        public DbSet<InvoiceNumberRanges> InvoiceNumberRanges { get; set; }
+        public DbSet<Invoices> Invoices { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
