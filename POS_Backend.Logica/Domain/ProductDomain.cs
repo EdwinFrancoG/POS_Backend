@@ -1,127 +1,200 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using POS_Backend.Datos;
+using POS_Backend.Datos.Models;
 
 namespace POS_Backend.Logica.Domain;
-public record ResultadoProducto(bool Exito, string? Error);
-public class ProductService
+
+public class ProductDomain
 {
     private readonly AppDbContext _db;
-    public ProductService(AppDbContext db) => _db = db;
 
-    //Las consultas
-    public async Task<List<Product>> ObtenerTodosAsync(bool soloActivos = true) =>
-    await _db.Products
-    .Include(p => p.Category)
-    .Where(p => !soloActivos || p.IsActive)
-    .OrderBy(p => p.Name)
-    .ToListAsync();
-
-    public async Task<Product?> ObtenerporId(int Id) =>
-    await _db.Products.Include(p => p.Category)
-    .FirstOrDefaultAsync(p => p.Id == Id);
-
-    public async Task<List<Product>> BuscarAsync(string texto)
+    public ProductDomain(AppDbContext db)
     {
-        texto = texto.Trim().ToLower();
-        return await _db.Products
-        .Where(p => p.IsActive &&
-        (p.Name.ToLower().Contains(texto) ||
-        p.Code.ToLower().Contains(texto) ||
-        (p.Barcode != null && p.Barcode == texto)))
-        .ToListAsync();
-    }
-    public async Task<List<Product>> ObtenerStockBajo() =>
-    await _db.Products
-    .Where(p => p.IsActive && p.Stock <= p.MinimumStock)
-    .ToListAsync();
-
-    // Todas las operaciones
-    // Crear producto
-    public async Task<ResultadoProducto> CrearAsync(Product producto)
-    {
-        var error = Validar(producto);
-        if(error !=null) return new(false, error);
-
-        producto.Code = producto.Code.Trim();
-
-        if (await _db.Products.AnyAsync(p => p.Code == producto.Code))
-            return new(false, "Ya existe un producto con ese código");
-
-        if (!string.IsNullOrWhiteSpace(producto.Barcode) &&
-            await _db.Products.AnyAsync(p => p.Barcode == producto.Barcode))
-            return new(false, "Ya existe un producto con ese código de barras");   
-
-         if (!await _db.Categories.AnyAsync(c => c.Id == producto.CategoryId))
-            return new(false, "La categoría no existe");        
-
-             producto.IsActive = true;
-             _db.Products.Add(producto);
-            await _db.SaveChangesAsync();
-            return new(true, null);
-    }
-    //Actualizar producto
-    public async Task<ResultadoProducto> ActaulizarAsync(Product producto)
-    {
-        var error = Validar(producto);
-        if(error !=null) return new(false, error);
-
-        var existente = await _db.Products.FindAsync(producto.Id);
-        if(existente == null)
-        return new(false, "El producto no existe");
-
-    producto.Code = producto.Code.Trim();
-
-    if (await _db.Products.AnyAsync(p => p.Code == producto.Code && p.Id != producto.Id))
-        return new(false, "Ya existe otro producto con ese código");
-    
-
-    if (!string.IsNullOrWhiteSpace(producto.Barcode) &&
-        await _db.Products.AnyAsync(p => p.Barcode == producto.Barcode && p.Id != producto.Id))
-        return new(false, "Ya existe otro producto con ese código de barras");  
-
-     if (!await _db.Categories.AnyAsync(c => c.Id == producto.CategoryId))
-        return new(false, "La categoría no existe");
-
-    existente.Code = producto.Code;
-    existente.Barcode = producto.Barcode;
-    existente.Name = producto.Name;
-    existente.Description = producto.Description;
-    existente.UnitOfMeasure = producto.UnitOfMeasure;
-    existente.CategoryId = producto.CategoryId;
-    existente.SupplierId = producto.SupplierId;
-    existente.AverageCost = producto.AverageCost;
-    existente.SalePrice = producto.SalePrice;
-    existente.TaxRate = producto.TaxRate;
-    existente.MinimumStock = producto.MinimumStock;
-
-    await _db.SaveChangesAsync();
-    return new(true, null);
-    }
-    //Cambiar estado
-    public async Task<ResultadoProducto> CambiarEstadoAsync(int Id, bool Activo)
-    {
-        var producto = await _db.Products.FindAsync(Id);
-        if(producto == null)
-        return new(false, "El producto no existe");
-
-        producto.IsActive = Activo;
-        await _db.SaveChangesAsync();
-        return new(true, null);
+        _db = db;
     }
 
-    // Las validaciones
-    private static string? Validar(Product p)
+    // Validaciones internas
+    private static string? Validar(Product producto)
     {
-        if (string.IsNullOrWhiteSpace(p.Code)) return "El codigo es obligatorio";
-        if (string.IsNullOrWhiteSpace(p.Name)) return "El nombre es obligatorio";
-        if (string.IsNullOrWhiteSpace(p.UnitOfMeasure)) return "La unidad de medida es obligatoria";
-        if (p.SalePrice <=0) return "El precio de la venta debe ser mayor a 0";
-        if (p.AverageCost < 0) return "El costo no puede ser negativo";
-        if (p.TaxRate < 0 || p.TaxRate > 100) return "El impuesto debe estar entre 0 y 100";
-        if (p.Stock < 0) return "El stock no puede ser negativo";
-        if (p.MinimumStock < 0) return "El stock minimo no puede ser negativo";
+        if (string.IsNullOrWhiteSpace(producto.Code))
+        {
+            return "El código es obligatorio";
+        }
+
+        if (string.IsNullOrWhiteSpace(producto.Name))
+        {
+            return "El nombre es obligatorio";
+        }
+
+        if (string.IsNullOrWhiteSpace(producto.UnitOfMeasure))
+        {
+            return "La unidad de medida es obligatoria";
+        }
+
+        if (producto.SalePrice <= 0)
+        {
+            return "El precio de venta debe ser mayor a 0";
+        }
+
+        if (producto.AverageCost < 0)
+        {
+            return "El costo no puede ser negativo";
+        }
+
+        if (producto.TaxRate < 0 || producto.TaxRate > 100)
+        {
+            return "El impuesto debe estar entre 0 y 100";
+        }
+
+        if (producto.Stock < 0)
+        {
+            return "El stock no puede ser negativo";
+        }
+
+        if (producto.MinimumStock < 0)
+        {
+            return "El stock mínimo no puede ser negativo";
+        }
 
         return null;
+    }
+
+    private static void Normalizar(Product producto)
+    {
+        producto.Code = producto.Code.Trim();
+        producto.Name = producto.Name.Trim();
+        producto.UnitOfMeasure = producto.UnitOfMeasure.Trim();
+        producto.Barcode = string.IsNullOrWhiteSpace(producto.Barcode) ? null : producto.Barcode.Trim();
+    }
+
+    // Consultas
+    public async Task<List<Product>> ObtenerTodos(bool soloActivos = true)
+    {
+        var consulta = _db.Products
+            .Include(p => p.Category)
+            .AsQueryable();
+
+        if (soloActivos)
+        {
+            consulta = consulta.Where(p => p.IsActive);
+        }
+
+        return await consulta
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+    }
+
+    public async Task<Product?> ObtenerPorId(int id)
+    {
+        return await _db.Products
+            .Include(p => p.Category)
+            .FirstOrDefaultAsync(p => p.Id == id);
+    }
+
+    public async Task<List<Product>> Buscar(string texto)
+    {
+        texto = texto.Trim().ToLower();
+
+        return await _db.Products
+            .Where(p => p.IsActive &&
+                (p.Name.ToLower().Contains(texto) ||
+                 p.Code.ToLower().Contains(texto) ||
+                 (p.Barcode != null && p.Barcode == texto)))
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+    }
+
+    public async Task<List<Product>> ObtenerStockBajo()
+    {
+        return await _db.Products
+            .Where(p => p.IsActive && p.Stock <= p.MinimumStock)
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+    }
+
+    // Verificar sin guardar en la base de datos
+    public async Task<string> VerificarCreacion(Product producto)
+    {
+        var error = Validar(producto);
+        if (error != null)
+        {
+            return error;
+        }
+
+        Normalizar(producto);
+
+        bool existeCodigo = await _db.Products.AnyAsync(p => p.Code == producto.Code);
+        if (existeCodigo)
+        {
+            return "Ya existe un producto con ese código";
+        }
+
+        if (producto.Barcode != null)
+        {
+            bool existeBarcode = await _db.Products.AnyAsync(p => p.Barcode == producto.Barcode);
+            if (existeBarcode)
+            {
+                return "Ya existe un producto con ese código de barras";
+            }
+        }
+
+        bool existeCategoria = await _db.Categories.AnyAsync(c => c.Id == producto.CategoryId);
+        if (!existeCategoria)
+        {
+            return "La categoría no existe";
+        }
+
+        return "OK";
+    }
+
+    public async Task<string> VerificarActualizacion(Product producto)
+    {
+        var error = Validar(producto);
+        if (error != null)
+        {
+            return error;
+        }
+
+        var existente = await _db.Products.FindAsync(producto.Id);
+        if (existente == null)
+        {
+            return "El producto no existe";
+        }
+
+        Normalizar(producto);
+
+        bool existeCodigo = await _db.Products.AnyAsync(p => p.Code == producto.Code && p.Id != producto.Id);
+        if (existeCodigo)
+        {
+            return "Ya existe otro producto con ese código";
+        }
+
+        if (producto.Barcode != null)
+        {
+            bool existeBarcode = await _db.Products.AnyAsync(p => p.Barcode == producto.Barcode && p.Id != producto.Id);
+            if (existeBarcode)
+            {
+                return "Ya existe otro producto con ese código de barras";
+            }
+        }
+
+        bool existeCategoria = await _db.Categories.AnyAsync(c => c.Id == producto.CategoryId);
+        if (!existeCategoria)
+        {
+            return "La categoría no existe";
+        }
+
+        return "OK";
+    }
+
+    public async Task<string> VerificarCambioEstado(int id)
+    {
+        bool existe = await _db.Products.AnyAsync(p => p.Id == id);
+        if (!existe)
+        {
+            return "El producto no existe";
+        }
+
+        return "OK";
     }
 }
