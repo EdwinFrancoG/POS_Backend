@@ -11,6 +11,17 @@ public static class DependencyInjection
     {
         services.AddDatos(configuration);
         services.AddScoped<ConexionService>();
+
+        services.AddScoped<ProveedorService>();
+        services.AddScoped<AsientoService>();
+        services.AddScoped<CategoryDomain>();
+        services.AddScoped<CategoryService>();
+        services.AddScoped<ProductDomain>();
+        services.AddScoped<ProductService>();
+        services.AddScoped<CategoryService>();
+        services.AddScoped<CustomerDomain>();
+        services.AddScoped<CustomerService>();
+
         return services;
     }
 }
