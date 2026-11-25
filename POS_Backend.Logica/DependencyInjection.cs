@@ -1,7 +1,9 @@
-﻿using POS_Backend.Logica.Servicios;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using POS_Backend.Datos;
+using POS_Backend.Logica.Domain;
+using POS_Backend.Logica.Services;
+using POS_Backend.Logica.Servicios;
 
 namespace POS_Backend.Logica;
 
@@ -11,17 +13,10 @@ public static class DependencyInjection
     {
         services.AddDatos(configuration);
         services.AddScoped<ConexionService>();
-
         services.AddScoped<ProveedorService>();
         services.AddScoped<AsientoService>();
         services.AddScoped<CategoryDomain>();
         services.AddScoped<CategoryService>();
-        services.AddScoped<ProductDomain>();
-        services.AddScoped<ProductService>();
-        services.AddScoped<CategoryService>();
-        services.AddScoped<CustomerDomain>();
-        services.AddScoped<CustomerService>();
-
         return services;
     }
 }

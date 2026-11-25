@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using POS_Backend.Datos;
+using POS_Backend.Datos.Models;
 
 namespace POS_Backend.Logica.Domain;
 
-public record Resultado(bool Exito, string? Error);
 public class CustomerDomain
 {
     private readonly AppDbContext _db;

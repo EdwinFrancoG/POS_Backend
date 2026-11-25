@@ -3,7 +3,6 @@ using POS_Backend.Datos;
 
 namespace POS_Backend.Logica.Domain;
 
-public record Resultado(bool Exito, string? Error);
 public class CategoryDomain
 {
     private readonly AppDbContext _db;
@@ -11,15 +10,21 @@ public class CategoryDomain
     public CategoryDomain(AppDbContext db) => _db = db;
 
     //Consultas
+    public async Task<IEnumerable<Category>> GetCategories() =>
+        await _db.Categories
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+
+
     public async Task<List<Category>> ObtenerTodasAsync(bool soloActivas = true) =>
     await _db.Categories
     .Where(c => !soloActivas || c.IsActive)
     .OrderBy(c => c.Name)
     .ToListAsync();
 
-     public async Task<Category?> ObtenerPorIdAsync(int id) =>
-        await _db.Categories.FindAsync(id);
-    
+    public async Task<Category?> ObtenerPorIdAsync(int id) =>
+       await _db.Categories.FindAsync(id);
+
     // Operaciones
     //Crear
     public async Task<Resultado> CrearAsync(Category categoria)
@@ -27,7 +32,7 @@ public class CategoryDomain
         var error = Validar(categoria);
         if (error != null) return new(false, error);
 
-        categoria.Name = categoria.Name.Trim(); 
+        categoria.Name = categoria.Name.Trim();
 
         if (await _db.Categories.AnyAsync(c => c.Name.ToLower() == categoria.Name.ToLower()))
             return new(false, "Ya existe una categoría con ese nombre");
@@ -37,6 +42,17 @@ public class CategoryDomain
         await _db.SaveChangesAsync();
         return new(true, null);
     }
+
+    public string categoryEvaluate(Category category)
+    {
+        if (category.Name == null)
+        {
+            return "El nombre de la categoria esta vacio";
+        }
+        return "OK";
+    }
+
+
     //Actualizar
     public async Task<Resultado> ActualizarAsync(Category categoria)
 
@@ -133,7 +149,7 @@ public class CategoryDomain
         return "OK";
     }
     //Cambiar estado
-        public async Task<Resultado> CambiarEstadoAsync(int id, bool activa)
+    public async Task<Resultado> CambiarEstadoAsync(int id, bool activa)
     {
         var categoria = await _db.Categories.FindAsync(id);
         if (categoria == null)
