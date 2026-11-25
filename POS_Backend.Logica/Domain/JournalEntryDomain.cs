@@ -1,201 +1,227 @@
-﻿using Microsoft.EntityFrameworkCore;
-using POS_Backend.Datos;
+﻿using Microsoft.Extensions.Logging;
 using POS_Backend.Datos.Models;
 using POS_Backend.Logica.Constants;
 using POS_Backend.Logica.Dtos;
 using POS_Backend.Logica.Exceptions;
+using POS_Backend.Logica.Services;
+using static POS_Backend.Logica.Exceptions.DomainExceptionFilter;
 
 namespace POS_Backend.Logica.Domain;
 
-public class AsientoService
+public class JournalEntryDomain
 {
-    private readonly AppDbContext _db;
+    private const int MinimumLines = 2;
+    private const int MoneyDecimals = 2;
 
-    public AsientoService(AppDbContext db) => _db = db;
+    private readonly IJournalEntryService _journalEntryService;
+    private readonly ILogger<JournalEntryDomain> _logger;
 
-    // Querys
-
-    public async Task<AsientoDto> ObtenerAsync(int id, CancellationToken ct = default)
+    public JournalEntryDomain(IJournalEntryService journalEntryService, ILogger<JournalEntryDomain> logger)
     {
-        var asiento = await ConsultaCompleta().AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct)
-            ?? throw new NoEncontradoException($"No existe el asiento con id {id}.");
-        return ToDto(asiento);
+        _journalEntryService = journalEntryService;
+        _logger = logger;
     }
 
-    public async Task<List<AsientoDto>> ListarAsync(
-        DateTime? desde = null, DateTime? hasta = null, CancellationToken ct = default)
+    public async Task<JournalEntryDto> GetByIdAsync(int id, CancellationToken ct = default)
     {
-        var query = ConsultaCompleta().AsNoTracking();
+        try
+        {
+            var entry = await _journalEntryService.GetByIdAsync(id, ct)
+                ?? throw new NotFoundException($"No existe el asiento con id {id}.");
 
-        if (desde is not null) query = query.Where(a => a.Date >= desde.Value.Date);
-        if (hasta is not null) query = query.Where(a => a.Date < hasta.Value.Date.AddDays(1));
-
-        var lista = await query
-            .OrderByDescending(a => a.Date)
-            .ThenByDescending(a => a.Id)
-            .ToListAsync(ct);
-
-        return lista.Select(ToDto).ToList();
+            return ToDto(entry);
+        }
+        catch (Exception ex) when (IsUnexpected(ex))
+        {
+            _logger.LogError(ex, "Error al obtener el asiento {JournalEntryId}.", id);
+            throw new DomainException($"No se pudo obtener el asiento con id {id}.", ex);
+        }
     }
 
-    private IQueryable<JournalEntry> ConsultaCompleta() =>
-        _db.JournalEntries
-            .Include(a => a.JournalEntryLines)
-            .ThenInclude(l => l.LedgerAccount);
-
-    // Create
-
-    public async Task<AsientoDto> CrearAsync(AsientoRequest req, CancellationToken ct = default)
+    public async Task<List<JournalEntryDto>> GetAllAsync(
+        DateTime? from = null, DateTime? to = null, CancellationToken ct = default)
     {
-        var errores = new List<string>();
-
-        if (req.UserId <= 0) errores.Add("El usuario es obligatorio.");
-        if (req.Date.Date > DateTime.Today) errores.Add("La fecha del asiento no puede ser futura.");
-
-        var lineas = req.Lines ?? new List<AsientoLineaRequest>();
-        if (lineas.Count < 2) errores.Add("El asiento necesita al menos 2 líneas.");
-
-        for (var i = 0; i < lineas.Count; i++)
+        try
         {
-            var l = lineas[i];
-            var n = i + 1;
-
-            if (l.Debit < 0 || l.Credit < 0)
-                errores.Add($"Línea {n}: los montos no pueden ser negativos.");
-            else if ((l.Debit > 0) == (l.Credit > 0))
-                errores.Add($"Línea {n}: debe tener un débito o un crédito, no ambos ni ninguno.");
-
-            if (decimal.Round(l.Debit, 2) != l.Debit || decimal.Round(l.Credit, 2) != l.Credit)
-                errores.Add($"Línea {n}: los montos admiten máximo 2 decimales.");
+            var entries = await _journalEntryService.GetAllAsync(from?.Date, to?.Date.AddDays(1), ct);
+            return entries.Select(ToDto).ToList();
         }
-
-        var totalDebito = lineas.Sum(l => l.Debit);
-        var totalCredito = lineas.Sum(l => l.Credit);
-
-        if (errores.Count == 0 && totalDebito != totalCredito)
-            errores.Add($"El asiento no cuadra: débitos {totalDebito:N2} y créditos {totalCredito:N2}.");
-
-        if (errores.Count > 0) throw new ReglaNegocioException(errores);
-
-        var ids = lineas.Select(l => l.LedgerAccountId).Distinct().ToList();
-        var cuentas = await _db.LedgerAccounts
-            .Where(c => ids.Contains(c.Id))
-            .ToDictionaryAsync(c => c.Id, ct);
-
-        foreach (var id in ids)
+        catch (Exception ex) when (IsUnexpected(ex))
         {
-            if (!cuentas.TryGetValue(id, out var cuenta))
-                errores.Add($"La cuenta con id {id} no existe.");
-            else if (!cuenta.IsActive)
-                errores.Add($"La cuenta {cuenta.Code} - {cuenta.Name} está inactiva.");
-            else if (!cuenta.AllowsPosting)
-                errores.Add($"La cuenta {cuenta.Code} - {cuenta.Name} no acepta movimientos (es una cuenta de agrupación).");
+            _logger.LogError(ex, "Error al listar los asientos.");
+            throw new DomainException("No se pudo obtener la lista de asientos.", ex);
         }
+    }
 
-        if (errores.Count > 0) throw new ReglaNegocioException(errores);
-
-        await using var tx = await _db.Database.BeginTransactionAsync(ct);
-
-        var asiento = new JournalEntry
+    public async Task<JournalEntryDto> CreateAsync(JournalEntryRequest request, CancellationToken ct = default)
+    {
+        try
         {
-            Number = "TMP-" + Guid.NewGuid().ToString("N")[..12],
-            Date = req.Date.Date,
-            Description = Limpiar(req.Description),
-            Source = OrigenAsiento.Manual,
-            Status = EstadoAsiento.Contabilizado,
-            TotalDebit = totalDebito,
-            TotalCredit = totalCredito,
-            UserId = req.UserId,
-            JournalEntryLines = lineas.Select(l => new JournalEntryLine
+            var lines = request.Lines ?? new List<JournalEntryLineRequest>();
+            var totalDebit = lines.Sum(l => l.Debit);
+            var totalCredit = lines.Sum(l => l.Credit);
+
+            ValidateRequest(request, lines, totalDebit, totalCredit);
+
+            var accountIds = lines.Select(l => l.LedgerAccountId).Distinct().ToList();
+            var accounts = await _journalEntryService.GetLedgerAccountsByIdsAsync(accountIds, ct);
+            ValidateAccounts(accountIds, accounts);
+
+            var entry = new JournalEntry
             {
-                LedgerAccountId = l.LedgerAccountId,
-                Debit = l.Debit,
-                Credit = l.Credit,
-                Description = Limpiar(l.Description)
-            }).ToList()
-        };
+                Date = request.Date.Date,
+                Description = CleanText(request.Description),
+                Source = JournalEntrySource.Manual,
+                Status = JournalEntryStatus.Posted,
+                TotalDebit = totalDebit,
+                TotalCredit = totalCredit,
+                UserId = request.UserId,
+                JournalEntryLines = lines.Select(l => new JournalEntryLine
+                {
+                    LedgerAccountId = l.LedgerAccountId,
+                    Debit = l.Debit,
+                    Credit = l.Credit,
+                    Description = CleanText(l.Description)
+                }).ToList()
+            };
 
-        _db.JournalEntries.Add(asiento);
-        await _db.SaveChangesAsync(ct);          
-
-        asiento.Number = $"AS-{asiento.Id:D6}";  
-        await _db.SaveChangesAsync(ct);
-
-        await tx.CommitAsync(ct);
-
-        return await ObtenerAsync(asiento.Id, ct);
+            var created = await _journalEntryService.AddAsync(entry, ct);
+            return ToDto(created);
+        }
+        catch (Exception ex) when (IsUnexpected(ex))
+        {
+            _logger.LogError(ex, "Error al crear el asiento.");
+            throw new DomainException("No se pudo crear el asiento.", ex);
+        }
     }
 
-    // Invalidate
-
-    public async Task<AsientoDto> AnularAsync(int id, AnularAsientoRequest req, CancellationToken ct = default)
+    public async Task<JournalEntryDto> VoidAsync(int id, VoidJournalEntryRequest request, CancellationToken ct = default)
     {
-        if (req.UserId <= 0) throw new ReglaNegocioException("El usuario es obligatorio.");
+        try
+        {
+            if (request.UserId <= 0)
+                throw new BusinessRuleException("El usuario es obligatorio.");
 
-        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+            var original = await _journalEntryService.GetForVoidAsync(id, ct)
+                ?? throw new NotFoundException($"No existe el asiento con id {id}.");
 
-        var original = await _db.JournalEntries
-            .Include(a => a.JournalEntryLines)
-            .FirstOrDefaultAsync(a => a.Id == id, ct)
-            ?? throw new NoEncontradoException($"No existe el asiento con id {id}.");
+            EnsureCanBeVoided(original);
 
-        if (original.Status == EstadoAsiento.Anulado)
-            throw new ReglaNegocioException("El asiento ya está anulado.");
+            var reversal = BuildReversal(original, request);
+            original.Status = JournalEntryStatus.Voided;
 
-        if (original.Source == OrigenAsiento.Reversa || original.ReversedEntryId is not null)
-            throw new ReglaNegocioException("No se puede anular un asiento de reversa.");
+            var created = await _journalEntryService.TryAddReversalAsync(original, reversal, ct)
+                ?? throw new BusinessRuleException("Este asiento ya tiene una reversa registrada.");
 
-        if (original.InvoiceId is not null || original.PurchaseOrderId is not null ||
-            original.PaymentId is not null || original.InventoryMovementId is not null ||
-            original.SupplierPaymentId is not null)
-            throw new ReglaNegocioException(
+            return ToDto(created);
+        }
+        catch (Exception ex) when (IsUnexpected(ex))
+        {
+            _logger.LogError(ex, "Error al anular el asiento {JournalEntryId}.", id);
+            throw new DomainException($"No se pudo anular el asiento con id {id}.", ex);
+        }
+    }
+
+    private static void ValidateRequest(
+        JournalEntryRequest request, List<JournalEntryLineRequest> lines, decimal totalDebit, decimal totalCredit)
+    {
+        var errors = new List<string>();
+
+        if (request.UserId <= 0)
+            errors.Add("El usuario es obligatorio.");
+
+        if (request.Date.Date > DateTime.Today)
+            errors.Add("La fecha del asiento no puede ser futura.");
+
+        if (lines.Count < MinimumLines)
+            errors.Add($"El asiento necesita al menos {MinimumLines} líneas.");
+
+        for (var i = 0; i < lines.Count; i++)
+            ValidateLine(lines[i], i + 1, errors);
+
+        if (errors.Count == 0 && totalDebit != totalCredit)
+            errors.Add($"El asiento no cuadra: débitos {totalDebit:N2} y créditos {totalCredit:N2}.");
+
+        if (errors.Count > 0) throw new BusinessRuleException(errors);
+    }
+
+    private static void ValidateLine(JournalEntryLineRequest line, int number, List<string> errors)
+    {
+        if (line.Debit < 0 || line.Credit < 0)
+            errors.Add($"Línea {number}: los montos no pueden ser negativos.");
+        else if ((line.Debit > 0) == (line.Credit > 0))
+            errors.Add($"Línea {number}: debe tener un débito o un crédito, no ambos ni ninguno.");
+
+        if (decimal.Round(line.Debit, MoneyDecimals) != line.Debit ||
+            decimal.Round(line.Credit, MoneyDecimals) != line.Credit)
+            errors.Add($"Línea {number}: los montos admiten máximo {MoneyDecimals} decimales.");
+    }
+
+    private static void ValidateAccounts(List<int> accountIds, Dictionary<int, LedgerAccount> accounts)
+    {
+        var errors = new List<string>();
+
+        foreach (var id in accountIds)
+        {
+            if (!accounts.TryGetValue(id, out var account))
+                errors.Add($"La cuenta con id {id} no existe.");
+            else if (!account.IsActive)
+                errors.Add($"La cuenta {account.Code} - {account.Name} está inactiva.");
+            else if (!account.AllowsPosting)
+                errors.Add($"La cuenta {account.Code} - {account.Name} no acepta movimientos (es una cuenta de agrupación).");
+        }
+
+        if (errors.Count > 0) throw new BusinessRuleException(errors);
+    }
+
+    private static void EnsureCanBeVoided(JournalEntry entry)
+    {
+        if (entry.Status == JournalEntryStatus.Voided)
+            throw new BusinessRuleException("El asiento ya está anulado.");
+
+        if (entry.Source == JournalEntrySource.Reversal || entry.ReversedEntryId is not null)
+            throw new BusinessRuleException("No se puede anular un asiento de reversa.");
+
+        if (IsGeneratedByAnotherModule(entry))
+            throw new BusinessRuleException(
                 "Este asiento lo generó otro módulo (venta, compra, pago o inventario) y debe anularse desde ese módulo.");
-
-        if (await _db.JournalEntries.AnyAsync(a => a.ReversedEntryId == id, ct))
-            throw new ReglaNegocioException("Este asiento ya tiene una reversa registrada.");
-
-        var reversa = new JournalEntry
-        {
-            Number = "TMP-" + Guid.NewGuid().ToString("N")[..12],
-            Date = DateTime.Today,
-            Description = Limpiar(req.Description) ?? $"Anulación del asiento {original.Number}",
-            Source = OrigenAsiento.Reversa,
-            Status = EstadoAsiento.Contabilizado,
-            ReversedEntryId = original.Id,
-            TotalDebit = original.TotalCredit,
-            TotalCredit = original.TotalDebit,
-            UserId = req.UserId,
-            JournalEntryLines = original.JournalEntryLines.Select(l => new JournalEntryLine
-            {
-                LedgerAccountId = l.LedgerAccountId,
-                Debit = l.Credit,      
-                Credit = l.Debit,     
-                Description = l.Description
-            }).ToList()
-        };
-
-        original.Status = EstadoAsiento.Anulado;
-
-        _db.JournalEntries.Add(reversa);
-        await _db.SaveChangesAsync(ct);
-
-        reversa.Number = $"AS-{reversa.Id:D6}";
-        await _db.SaveChangesAsync(ct);
-
-        await tx.CommitAsync(ct);
-
-        return await ObtenerAsync(reversa.Id, ct);
     }
 
-    // Clean
-    private static string? Limpiar(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+    private static bool IsGeneratedByAnotherModule(JournalEntry entry) =>
+        entry.InvoiceId is not null ||
+        entry.PurchaseOrderId is not null ||
+        entry.PaymentId is not null ||
+        entry.InventoryMovementId is not null ||
+        entry.SupplierPaymentId is not null;
 
-    private static AsientoDto ToDto(JournalEntry a) => new(
-        a.Id, a.Number, a.Date, a.Description, a.Source, a.Status,
-        a.TotalDebit, a.TotalCredit, a.UserId, a.ReversedEntryId,
-        a.JournalEntryLines
+    private static JournalEntry BuildReversal(JournalEntry original, VoidJournalEntryRequest request) => new()
+    {
+        Date = DateTime.Today,
+        Description = CleanText(request.Description) ?? $"Anulación del asiento {original.Number}",
+        Source = JournalEntrySource.Reversal,
+        Status = JournalEntryStatus.Posted,
+        ReversedEntryId = original.Id,
+        TotalDebit = original.TotalCredit,
+        TotalCredit = original.TotalDebit,
+        UserId = request.UserId,
+        JournalEntryLines = original.JournalEntryLines.Select(l => new JournalEntryLine
+        {
+            LedgerAccountId = l.LedgerAccountId,
+            Debit = l.Credit,
+            Credit = l.Debit,
+            Description = l.Description
+        }).ToList()
+    };
+
+    private static string? CleanText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static JournalEntryDto ToDto(JournalEntry entry) => new(
+        entry.Id, entry.Number, entry.Date, entry.Description, entry.Source, entry.Status,
+        entry.TotalDebit, entry.TotalCredit, entry.UserId, entry.ReversedEntryId,
+        entry.JournalEntryLines
             .OrderBy(l => l.Id)
-            .Select(l => new AsientoLineaDto(
+            .Select(l => new JournalEntryLineDto(
                 l.LedgerAccountId, l.LedgerAccount.Code, l.LedgerAccount.Name,
                 l.Debit, l.Credit, l.Description))
             .ToList());

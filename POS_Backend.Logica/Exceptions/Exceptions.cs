@@ -1,19 +1,25 @@
 ﻿namespace POS_Backend.Logica.Exceptions;
 
-public class ReglaNegocioException : Exception
+public class BusinessRuleException : Exception
 {
-    public IReadOnlyList<string> Errores { get; }
+    public IReadOnlyList<string> Errors { get; }
 
-    public ReglaNegocioException(IEnumerable<string> errores)
-        : base(string.Join(" ", errores))
+    public BusinessRuleException(IEnumerable<string> errors)
+        : base(string.Join(" ", errors))
     {
-        Errores = errores.ToList();
+        Errors = errors.ToList();
     }
 
-    public ReglaNegocioException(string error) : this(new[] { error }) { }
+    public BusinessRuleException(string error) : this(new[] { error }) { }
 }
 
-public class NoEncontradoException : Exception
+public class NotFoundException : Exception
 {
-    public NoEncontradoException(string mensaje) : base(mensaje) { }
+    public NotFoundException(string message) : base(message) { }
+}
+
+public class DomainException : Exception
+{
+    public DomainException(string message, Exception innerException)
+        : base(message, innerException) { }
 }

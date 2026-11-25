@@ -1,24 +1,22 @@
 ﻿namespace POS_Backend.Logica.Dtos;
 
-// Datos Entrantes
-public record AsientoLineaRequest(
+public record JournalEntryLineRequest(
     int LedgerAccountId,
     decimal Debit,
     decimal Credit,
     string? Description);
 
-public record AsientoRequest(
+public record JournalEntryRequest(
     DateTime Date,
     string? Description,
     int UserId,
-    List<AsientoLineaRequest> Lines);
+    List<JournalEntryLineRequest> Lines);
 
-public record AnularAsientoRequest(
+public record VoidJournalEntryRequest(
     string? Description,
     int UserId);
 
-// Datos Salientes
-public record AsientoLineaDto(
+public record JournalEntryLineDto(
     int LedgerAccountId,
     string AccountCode,
     string AccountName,
@@ -26,7 +24,7 @@ public record AsientoLineaDto(
     decimal Credit,
     string? Description);
 
-public record AsientoDto(
+public record JournalEntryDto(
     int Id,
     string Number,
     DateTime Date,
@@ -37,4 +35,4 @@ public record AsientoDto(
     decimal TotalCredit,
     int UserId,
     int? ReversedEntryId,
-    List<AsientoLineaDto> Lines);
+    List<JournalEntryLineDto> Lines);

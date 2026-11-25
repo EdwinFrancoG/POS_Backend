@@ -7,7 +7,7 @@ builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-builder.Services.AddExceptionHandler<POS_Backend.Infraestructura.ManejadorExcepciones>();
+builder.Services.AddExceptionHandler<POS_Backend.Infrastructure.GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddLogica(builder.Configuration);
 var app = builder.Build();

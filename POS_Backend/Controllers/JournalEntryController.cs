@@ -1,37 +1,38 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using POS_Backend.Logica.Dtos;
 using POS_Backend.Logica.Domain;
+using POS_Backend.Logica.Dtos;
 
 namespace POS_Backend.Controllers;
 
 [ApiController]
 [Route("api/asientos")]
-public class AsientosController : ControllerBase
+public class JournalEntryController : ControllerBase
 {
-    private readonly AsientoService _servicio;
+    private readonly JournalEntryDomain _journalEntryDomain;
 
-    public AsientosController(AsientoService servicio) => _servicio = servicio;
+    public JournalEntryController(JournalEntryDomain journalEntryDomain) =>
+        _journalEntryDomain = journalEntryDomain;
 
     [HttpGet]
-    public async Task<ActionResult<List<AsientoDto>>> Listar(
-        [FromQuery] DateTime? desde, [FromQuery] DateTime? hasta, CancellationToken ct)
-        => Ok(await _servicio.ListarAsync(desde, hasta, ct));
+    public async Task<ActionResult<List<JournalEntryDto>>> GetAll(
+        [FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)
+        => Ok(await _journalEntryDomain.GetAllAsync(from, to, ct));
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<AsientoDto>> Obtener(int id, CancellationToken ct)
-        => Ok(await _servicio.ObtenerAsync(id, ct));
+    public async Task<ActionResult<JournalEntryDto>> GetById(int id, CancellationToken ct)
+        => Ok(await _journalEntryDomain.GetByIdAsync(id, ct));
 
     [HttpPost]
-    public async Task<ActionResult<AsientoDto>> Crear(AsientoRequest req, CancellationToken ct)
+    public async Task<ActionResult<JournalEntryDto>> Create(JournalEntryRequest request, CancellationToken ct)
     {
-        var creado = await _servicio.CrearAsync(req, ct);
-        return CreatedAtAction(nameof(Obtener), new { id = creado.Id }, creado);
+        var created = await _journalEntryDomain.CreateAsync(request, ct);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
     [HttpPost("{id:int}/anular")]
-    public async Task<ActionResult<AsientoDto>> Anular(int id, AnularAsientoRequest req, CancellationToken ct)
+    public async Task<ActionResult<JournalEntryDto>> Void(int id, VoidJournalEntryRequest request, CancellationToken ct)
     {
-        var reversa = await _servicio.AnularAsync(id, req, ct);
-        return CreatedAtAction(nameof(Obtener), new { id = reversa.Id }, reversa);
+        var reversal = await _journalEntryDomain.VoidAsync(id, request, ct);
+        return CreatedAtAction(nameof(GetById), new { id = reversal.Id }, reversal);
     }
 }
