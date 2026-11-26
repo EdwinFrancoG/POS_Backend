@@ -124,4 +124,9 @@ public class ProductService
 
         return null;
     }
+
+    public async Task GetProducts()
+    {
+        throw new NotImplementedException();
+    }
 }
