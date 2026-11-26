@@ -21,6 +21,8 @@ public static class DependencyInjection
         services.AddScoped<ProductDomain>();
         services.AddScoped<CategoryDomain>();
         services.AddScoped<CategoryService>();
+        services.AddScoped<PurchaseOrderDomain>();
+        services.AddScoped<InventoryMovementDomain>();
         return services;
     }
 }
