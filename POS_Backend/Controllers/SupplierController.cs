@@ -1,48 +1,48 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using POS_Backend.Logica.Dtos;
 using POS_Backend.Logica.Domain;
+using POS_Backend.Logica.Dtos;
 
 namespace POS_Backend.Controllers;
 
 [ApiController]
 [Route("api/proveedores")]
-public class ProveedoresController : ControllerBase
+public class SupplierController : ControllerBase
 {
-    private readonly ProveedorService _servicio;
+    private readonly SupplierDomain _supplierDomain;
 
-    public ProveedoresController(ProveedorService servicio) => _servicio = servicio;
+    public SupplierController(SupplierDomain supplierDomain) => _supplierDomain = supplierDomain;
 
     [HttpGet]
-    public async Task<ActionResult<List<ProveedorDto>>> getSupplier(
-        [FromQuery] bool soloActivos = true, CancellationToken ct = default)
-        => Ok(await _servicio.ListarAsync(soloActivos, ct));
+    public async Task<ActionResult<List<SupplierDto>>> GetAll(
+        [FromQuery] bool onlyActive = true, CancellationToken ct = default)
+        => Ok(await _supplierDomain.GetAllAsync(onlyActive, ct));
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<ProveedorDto>> getSupplierById(int id, CancellationToken ct)
-        => Ok(await _servicio.ObtenerAsync(id, ct));
+    public async Task<ActionResult<SupplierDto>> GetById(int id, CancellationToken ct)
+        => Ok(await _supplierDomain.GetByIdAsync(id, ct));
 
     [HttpPost]
-    public async Task<ActionResult<ProveedorDto>> Crear(ProveedorRequest req, CancellationToken ct)
+    public async Task<ActionResult<SupplierDto>> Create(SupplierRequest request, CancellationToken ct)
     {
-        var creado = await _servicio.CrearAsync(req, ct);
-        return CreatedAtAction(nameof(getSupplierById), new { id = creado.Id }, creado);
+        var created = await _supplierDomain.CreateAsync(request, ct);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
     [HttpPut("{id:int}")]
-    public async Task<ActionResult<ProveedorDto>> Editar(int id, ProveedorRequest req, CancellationToken ct)
-        => Ok(await _servicio.EditarAsync(id, req, ct));
+    public async Task<ActionResult<SupplierDto>> Update(int id, SupplierRequest request, CancellationToken ct)
+        => Ok(await _supplierDomain.UpdateAsync(id, request, ct));
 
     [HttpPatch("{id:int}/desactivar")]
-    public async Task<IActionResult> Desactivar(int id, CancellationToken ct)
+    public async Task<IActionResult> Deactivate(int id, CancellationToken ct)
     {
-        await _servicio.DesactivarAsync(id, ct);
+        await _supplierDomain.DeactivateAsync(id, ct);
         return NoContent();
     }
 
     [HttpPatch("{id:int}/activar")]
-    public async Task<IActionResult> Activar(int id, CancellationToken ct)
+    public async Task<IActionResult> Activate(int id, CancellationToken ct)
     {
-        await _servicio.ActivarAsync(id, ct);
+        await _supplierDomain.ActivateAsync(id, ct);
         return NoContent();
     }
 }

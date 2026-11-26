@@ -1,13 +1,13 @@
 ﻿namespace POS_Backend.Logica.Constants;
 
-public static class EstadoAsiento
+public static class JournalEntryStatus
 {
-    public const string Contabilizado = "Contabilizado";
-    public const string Anulado = "Anulado";
+    public const string Posted = "Contabilizado";
+    public const string Voided = "Anulado";
 }
 
-public static class OrigenAsiento
+public static class JournalEntrySource
 {
     public const string Manual = "Manual";
-    public const string Reversa = "Reversa";
+    public const string Reversal = "Reversa";
 }
