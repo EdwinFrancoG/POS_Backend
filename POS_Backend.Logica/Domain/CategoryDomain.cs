@@ -55,10 +55,25 @@ public class CategoryDomain
 
     //Actualizar
     public async Task<Resultado> ActualizarAsync(Category categoria)
-
-    public CategoryDomain(AppDbContext db)
     {
-        _db = db;
+        var error = Validar(categoria);
+        if (error != null) return new(false, error);
+
+        var existente = await _db.Categories.FindAsync(categoria.Id);
+        if (existente == null)
+            return new(false, "La categoría no existe");
+
+        categoria.Name = categoria.Name.Trim();
+
+        if (await _db.Categories.AnyAsync(c =>
+                c.Name.ToLower() == categoria.Name.ToLower() && c.Id != categoria.Id))
+            return new(false, "Ya existe otra categoría con ese nombre");
+
+        existente.Name = categoria.Name;
+        existente.Description = categoria.Description;
+
+        await _db.SaveChangesAsync();
+        return new(true, null);
     }
 
     // Validaciones internas
@@ -155,6 +170,13 @@ public class CategoryDomain
         if (categoria == null)
             return new(false, "La categoría no existe");
 
+        if (!activa && await _db.Products.AnyAsync(p => p.CategoryId == id && p.IsActive))
+            return new(false, "No se puede desactivar: tiene productos activos");
+
+        categoria.IsActive = activa;
+        await _db.SaveChangesAsync();
+        return new(true, null);
+    }
 
     public async Task<string> VerificarCambioEstado(int id, bool activa)
     {
