@@ -1,6 +1,9 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using POS_Backend.Datos.Models;
+using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace POS_Backend.Datos.Mappings
 {
@@ -21,5 +24,6 @@ namespace POS_Backend.Datos.Mappings
                 .HasForeignKey(ur => ur.RoleId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
+    
     }
 }

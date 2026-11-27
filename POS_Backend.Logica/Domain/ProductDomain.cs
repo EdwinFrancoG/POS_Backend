@@ -1,200 +1,252 @@
-using Microsoft.EntityFrameworkCore;
-using POS_Backend.Datos;
-using POS_Backend.Datos.Models;
+using Microsoft.Extensions.Logging;
+using POS_Backend.Logica.Dtos;
+using POS_Backend.Logica.Exceptions;
+using POS_Backend.Logica.Services;
+using static POS_Backend.Logica.Exceptions.DomainExceptionFilter;
 
 namespace POS_Backend.Logica.Domain;
 
 public class ProductDomain
 {
-    private readonly AppDbContext _db;
+    private const int CodeMaxLength = 50;
+    private const int BarcodeMaxLength = 50;
+    private const int NameMaxLength = 75;
+    private const int DescriptionMaxLength = 500;
+    private const int UnitOfMeasureMaxLength = 20;
+    private const decimal TaxRateMin = 0;
+    private const decimal TaxRateMax = 100;
 
-    public ProductDomain(AppDbContext db)
+    private readonly IProductService _productService;
+    private readonly ILogger<ProductDomain> _logger;
+
+    public ProductDomain(IProductService productService, ILogger<ProductDomain> logger)
     {
-        _db = db;
+        _productService = productService;
+        _logger = logger;
     }
 
-    // Validaciones internas
-    private static string? Validar(Product producto)
+    public async Task<List<ProductDto>> GetAllAsync(bool onlyActive = true, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(producto.Code))
+        try
         {
-            return "El código es obligatorio";
+            var products = await _productService.GetAllAsync(onlyActive, ct);
+            return products.Select(ToDto).ToList();
         }
-
-        if (string.IsNullOrWhiteSpace(producto.Name))
+        catch (Exception ex) when (IsUnexpected(ex))
         {
-            return "El nombre es obligatorio";
+            _logger.LogError(ex, "Error al listar los productos.");
+            throw new DomainException("No se pudo obtener la lista de productos.", ex);
         }
-
-        if (string.IsNullOrWhiteSpace(producto.UnitOfMeasure))
-        {
-            return "La unidad de medida es obligatoria";
-        }
-
-        if (producto.SalePrice <= 0)
-        {
-            return "El precio de venta debe ser mayor a 0";
-        }
-
-        if (producto.AverageCost < 0)
-        {
-            return "El costo no puede ser negativo";
-        }
-
-        if (producto.TaxRate < 0 || producto.TaxRate > 100)
-        {
-            return "El impuesto debe estar entre 0 y 100";
-        }
-
-        if (producto.Stock < 0)
-        {
-            return "El stock no puede ser negativo";
-        }
-
-        if (producto.MinimumStock < 0)
-        {
-            return "El stock mínimo no puede ser negativo";
-        }
-
-        return null;
     }
 
-    private static void Normalizar(Product producto)
+    public async Task<ProductDto> GetByIdAsync(int id, CancellationToken ct = default)
     {
-        producto.Code = producto.Code.Trim();
-        producto.Name = producto.Name.Trim();
-        producto.UnitOfMeasure = producto.UnitOfMeasure.Trim();
-        producto.Barcode = string.IsNullOrWhiteSpace(producto.Barcode) ? null : producto.Barcode.Trim();
-    }
-
-    // Consultas
-    public async Task<List<Product>> ObtenerTodos(bool soloActivos = true)
-    {
-        var consulta = _db.Products
-            .Include(p => p.Category)
-            .AsQueryable();
-
-        if (soloActivos)
+        try
         {
-            consulta = consulta.Where(p => p.IsActive);
+            var product = await GetExistingAsync(id, ct);
+            return ToDto(product);
         }
-
-        return await consulta
-            .OrderBy(p => p.Name)
-            .ToListAsync();
-    }
-
-    public async Task<Product?> ObtenerPorId(int id)
-    {
-        return await _db.Products
-            .Include(p => p.Category)
-            .FirstOrDefaultAsync(p => p.Id == id);
-    }
-
-    public async Task<List<Product>> Buscar(string texto)
-    {
-        texto = texto.Trim().ToLower();
-
-        return await _db.Products
-            .Where(p => p.IsActive &&
-                (p.Name.ToLower().Contains(texto) ||
-                 p.Code.ToLower().Contains(texto) ||
-                 (p.Barcode != null && p.Barcode == texto)))
-            .OrderBy(p => p.Name)
-            .ToListAsync();
-    }
-
-    public async Task<List<Product>> ObtenerStockBajo()
-    {
-        return await _db.Products
-            .Where(p => p.IsActive && p.Stock <= p.MinimumStock)
-            .OrderBy(p => p.Name)
-            .ToListAsync();
-    }
-
-    // Verificar sin guardar en la base de datos
-    public async Task<string> VerificarCreacion(Product producto)
-    {
-        var error = Validar(producto);
-        if (error != null)
+        catch (Exception ex) when (IsUnexpected(ex))
         {
-            return error;
+            _logger.LogError(ex, "Error al obtener el producto {ProductId}.", id);
+            throw new DomainException($"No se pudo obtener el producto con id {id}.", ex);
         }
+    }
 
-        Normalizar(producto);
-
-        bool existeCodigo = await _db.Products.AnyAsync(p => p.Code == producto.Code);
-        if (existeCodigo)
+    public async Task<List<ProductDto>> SearchAsync(string? text, CancellationToken ct = default)
+    {
+        try
         {
-            return "Ya existe un producto con ese código";
+            if (string.IsNullOrWhiteSpace(text))
+                return new List<ProductDto>();
+
+            var products = await _productService.SearchActiveAsync(text.Trim(), ct);
+            return products.Select(ToDto).ToList();
         }
-
-        if (producto.Barcode != null)
+        catch (Exception ex) when (IsUnexpected(ex))
         {
-            bool existeBarcode = await _db.Products.AnyAsync(p => p.Barcode == producto.Barcode);
-            if (existeBarcode)
+            _logger.LogError(ex, "Error al buscar productos.");
+            throw new DomainException("No se pudo realizar la búsqueda de productos.", ex);
+        }
+    }
+
+    public async Task<List<ProductDto>> GetLowStockAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var products = await _productService.GetLowStockAsync(ct);
+            return products.Select(ToDto).ToList();
+        }
+        catch (Exception ex) when (IsUnexpected(ex))
+        {
+            _logger.LogError(ex, "Error al consultar los productos con stock bajo.");
+            throw new DomainException("No se pudo obtener la lista de productos con stock bajo.", ex);
+        }
+    }
+
+    public async Task<ProductDto> CreateAsync(ProductRequest request, CancellationToken ct = default)
+    {
+        try
+        {
+            var data = Normalize(request);
+            await ValidateAsync(data, null, ct);
+
+            var product = new Product
             {
-                return "Ya existe un producto con ese código de barras";
-            }
-        }
+                Code = data.Code,
+                Barcode = data.Barcode,
+                Name = data.Name,
+                Description = data.Description,
+                UnitOfMeasure = data.UnitOfMeasure,
+                CategoryId = data.CategoryId,
+                SupplierId = data.SupplierId,
+                AverageCost = data.AverageCost,
+                SalePrice = data.SalePrice,
+                TaxRate = data.TaxRate,
+                Stock = data.Stock,
+                MinimumStock = data.MinimumStock,
+                IsActive = true
+            };
 
-        bool existeCategoria = await _db.Categories.AnyAsync(c => c.Id == producto.CategoryId);
-        if (!existeCategoria)
+            var created = await _productService.AddAsync(product, ct);
+            return ToDto(created);
+        }
+        catch (Exception ex) when (IsUnexpected(ex))
         {
-            return "La categoría no existe";
+            _logger.LogError(ex, "Error al crear el producto.");
+            throw new DomainException("No se pudo crear el producto.", ex);
         }
-
-        return "OK";
     }
 
-    public async Task<string> VerificarActualizacion(Product producto)
+    public async Task<ProductDto> UpdateAsync(int id, ProductRequest request, CancellationToken ct = default)
     {
-        var error = Validar(producto);
-        if (error != null)
+        try
         {
-            return error;
-        }
+            var product = await GetExistingAsync(id, ct);
 
-        var existente = await _db.Products.FindAsync(producto.Id);
-        if (existente == null)
+            var data = Normalize(request);
+            await ValidateAsync(data, id, ct);
+
+            product.Code = data.Code;
+            product.Barcode = data.Barcode;
+            product.Name = data.Name;
+            product.Description = data.Description;
+            product.UnitOfMeasure = data.UnitOfMeasure;
+            product.CategoryId = data.CategoryId;
+            product.SupplierId = data.SupplierId;
+            product.AverageCost = data.AverageCost;
+            product.SalePrice = data.SalePrice;
+            product.TaxRate = data.TaxRate;
+            product.MinimumStock = data.MinimumStock;
+
+            var updated = await _productService.UpdateAsync(product, ct);
+            return ToDto(updated);
+        }
+        catch (Exception ex) when (IsUnexpected(ex))
         {
-            return "El producto no existe";
+            _logger.LogError(ex, "Error al actualizar el producto {ProductId}.", id);
+            throw new DomainException($"No se pudo actualizar el producto con id {id}.", ex);
         }
-
-        Normalizar(producto);
-
-        bool existeCodigo = await _db.Products.AnyAsync(p => p.Code == producto.Code && p.Id != producto.Id);
-        if (existeCodigo)
-        {
-            return "Ya existe otro producto con ese código";
-        }
-
-        if (producto.Barcode != null)
-        {
-            bool existeBarcode = await _db.Products.AnyAsync(p => p.Barcode == producto.Barcode && p.Id != producto.Id);
-            if (existeBarcode)
-            {
-                return "Ya existe otro producto con ese código de barras";
-            }
-        }
-
-        bool existeCategoria = await _db.Categories.AnyAsync(c => c.Id == producto.CategoryId);
-        if (!existeCategoria)
-        {
-            return "La categoría no existe";
-        }
-
-        return "OK";
     }
 
-    public async Task<string> VerificarCambioEstado(int id)
+    public Task DeactivateAsync(int id, CancellationToken ct = default) => ChangeStatusAsync(id, false, ct);
+
+    public Task ActivateAsync(int id, CancellationToken ct = default) => ChangeStatusAsync(id, true, ct);
+
+    private async Task ChangeStatusAsync(int id, bool active, CancellationToken ct)
     {
-        bool existe = await _db.Products.AnyAsync(p => p.Id == id);
-        if (!existe)
+        try
         {
-            return "El producto no existe";
-        }
+            var product = await GetExistingAsync(id, ct);
 
-        return "OK";
+            if (product.IsActive == active) return;
+
+            product.IsActive = active;
+            await _productService.UpdateAsync(product, ct);
+        }
+        catch (Exception ex) when (IsUnexpected(ex))
+        {
+            var action = active ? "activar" : "desactivar";
+            _logger.LogError(ex, "Error al {Action} el producto {ProductId}.", action, id);
+            throw new DomainException($"No se pudo {action} el producto con id {id}.", ex);
+        }
     }
+
+    private async Task<Product> GetExistingAsync(int id, CancellationToken ct) =>
+        await _productService.GetByIdAsync(id, ct)
+            ?? throw new NotFoundException($"No existe el producto con id {id}.");
+
+    private async Task ValidateAsync(ProductRequest data, int? currentId, CancellationToken ct)
+    {
+        ValidateFormat(data);
+        await ValidateReferencesAsync(data, currentId, ct);
+    }
+
+    private static void ValidateFormat(ProductRequest data)
+    {
+        var errors = new List<string>();
+
+        if (data.Code.Length == 0) errors.Add("El código es obligatorio.");
+        else if (data.Code.Length > CodeMaxLength) errors.Add($"El código no puede pasar de {CodeMaxLength} caracteres.");
+
+        if (data.Barcode is { Length: > BarcodeMaxLength })
+            errors.Add($"El código de barras no puede pasar de {BarcodeMaxLength} caracteres.");
+
+        if (data.Name.Length == 0) errors.Add("El nombre es obligatorio.");
+        else if (data.Name.Length > NameMaxLength) errors.Add($"El nombre no puede pasar de {NameMaxLength} caracteres.");
+
+        if (data.Description is { Length: > DescriptionMaxLength })
+            errors.Add($"La descripción no puede pasar de {DescriptionMaxLength} caracteres.");
+
+        if (data.UnitOfMeasure.Length == 0) errors.Add("La unidad de medida es obligatoria.");
+        else if (data.UnitOfMeasure.Length > UnitOfMeasureMaxLength)
+            errors.Add($"La unidad de medida no puede pasar de {UnitOfMeasureMaxLength} caracteres.");
+
+        if (data.SalePrice <= 0) errors.Add("El precio de venta debe ser mayor a 0.");
+        if (data.AverageCost < 0) errors.Add("El costo no puede ser negativo.");
+
+        if (data.TaxRate < TaxRateMin || data.TaxRate > TaxRateMax)
+            errors.Add($"El impuesto debe estar entre {TaxRateMin} y {TaxRateMax}.");
+
+        if (data.Stock < 0) errors.Add("El stock no puede ser negativo.");
+        if (data.MinimumStock < 0) errors.Add("El stock mínimo no puede ser negativo.");
+
+        if (errors.Count > 0) throw new BusinessRuleException(errors);
+    }
+
+    private async Task ValidateReferencesAsync(ProductRequest data, int? currentId, CancellationToken ct)
+    {
+        var errors = new List<string>();
+
+        if (await _productService.ExistsByCodeAsync(data.Code, currentId, ct))
+            errors.Add("Ya existe un producto con ese código.");
+
+        if (data.Barcode is not null && await _productService.ExistsByBarcodeAsync(data.Barcode, currentId, ct))
+            errors.Add("Ya existe un producto con ese código de barras.");
+
+        if (!await _productService.CategoryExistsAsync(data.CategoryId, ct))
+            errors.Add("La categoría no existe.");
+
+        if (data.SupplierId is not null && !await _productService.SupplierExistsAsync(data.SupplierId.Value, ct))
+            errors.Add("El proveedor no existe.");
+
+        if (errors.Count > 0) throw new BusinessRuleException(errors);
+    }
+
+    private static ProductRequest Normalize(ProductRequest request) => request with
+    {
+        Code = (request.Code ?? string.Empty).Trim(),
+        Barcode = CleanText(request.Barcode),
+        Name = (request.Name ?? string.Empty).Trim(),
+        Description = CleanText(request.Description),
+        UnitOfMeasure = (request.UnitOfMeasure ?? string.Empty).Trim()
+    };
+
+    private static string? CleanText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static ProductDto ToDto(Product p) => new(
+        p.Id, p.Code, p.Barcode, p.Name, p.Description, p.UnitOfMeasure,
+        p.CategoryId, p.Category?.Name ?? string.Empty, p.SupplierId,
+        p.AverageCost, p.SalePrice, p.TaxRate, p.Stock, p.MinimumStock, p.IsActive);
 }

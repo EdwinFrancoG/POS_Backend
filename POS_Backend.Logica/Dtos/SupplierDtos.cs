@@ -1,6 +1,6 @@
 ﻿namespace POS_Backend.Logica.Dtos;
 
-public record ProveedorRequest(
+public record SupplierRequest(
     string Code,
     string Name,
     string? Rtn,
@@ -10,7 +10,7 @@ public record ProveedorRequest(
     string? Address,
     int CreditDays);
 
-public record ProveedorDto(
+public record SupplierDto(
     int Id,
     string Code,
     string Name,
